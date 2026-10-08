@@ -1,8 +1,15 @@
-
 "use client";
 
-import { useState } from "react";
-import { Container, Typography, TextField, Button, Checkbox, Box } from "@mui/material";
+import { useEffect, useState } from "react";
+import {
+  Container,
+  Typography,
+  TextField,
+  Button,
+  Checkbox,
+  Box,
+  Alert,
+} from "@mui/material";
 
 export default function Home() {
   const [movies, setMovies] = useState([]);
@@ -10,59 +17,108 @@ export default function Home() {
   const [genre, setGenre] = useState("");
   const [year, setYear] = useState("");
   const [editId, setEditId] = useState(null);
+  const [error, setError] = useState("");
 
-  function saveMovie() {
-    if (!title.trim() || !genre.trim() || !year) return;
-
-    if (editId !== null) {
-      setMovies(movies.map(movie =>
-        movie.id === editId
-          ? { ...movie, title: title.trim(), genre: genre.trim(), year: Number(year) }
-          : movie
-      ));
-      setEditId(null);
-    } else {
-      setMovies([...movies, {
-        id: crypto.randomUUID(),
-        title: title.trim(),
-        genre: genre.trim(),
-        year: Number(year),
-        watched: false
-      }]);
+  useEffect(() => {
+    async function loadMovies() {
+      try {
+        const res = await fetch("/api/movies");
+        if (!res.ok) throw new Error("Could not load movies.");
+        setMovies(await res.json());
+      } catch (err) {
+        setError(err.message);
+      }
     }
 
+    loadMovies();
+  }, []);
+
+  function resetForm() {
     setTitle("");
     setGenre("");
     setYear("");
+    setEditId(null);
+  }
+
+  async function saveMovie() {
+    if (!title.trim() || !genre.trim() || !year) return;
+    setError("");
+
+    const body = {
+      title: title.trim(),
+      genre: genre.trim(),
+      year: Number(year),
+    };
+
+    try {
+      const res = await fetch(
+        editId !== null ? `/api/movies/${editId}` : "/api/movies",
+        {
+          method: editId !== null ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+
+      if (editId !== null) {
+        setMovies(movies.map((m) => (m.id === editId ? data : m)));
+      } else {
+        setMovies([...movies, data]);
+      }
+      resetForm();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   function editMovie(movie) {
     setTitle(movie.title);
     setGenre(movie.genre);
-    setYear(String(movie.year));
+    setYear(String(movie.year ?? ""));
     setEditId(movie.id);
   }
 
-  function deleteMovie(id) {
-    setMovies(movies.filter(movie => movie.id !== id));
+  async function deleteMovie(id) {
+    setError("");
+    try {
+      const res = await fetch(`/api/movies/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Could not delete movie.");
 
-    if (editId === id) {
-      setEditId(null);
-      setTitle("");
-      setGenre("");
-      setYear("");
+      setMovies(movies.filter((m) => m.id !== id));
+      if (editId === id) resetForm();
+    } catch (err) {
+      setError(err.message);
     }
   }
 
-  function toggleWatched(id) {
-    setMovies(movies.map(movie =>
-      movie.id === id ? { ...movie, watched: !movie.watched } : movie
-    ));
+  async function toggleWatched(movie) {
+    setError("");
+    try {
+      const res = await fetch(`/api/movies/${movie.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ watched: !movie.watched }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not update movie.");
+
+      setMovies(movies.map((m) => (m.id === movie.id ? data : m)));
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   return (
     <Container maxWidth="sm" sx={{ mt: 5 }}>
       <Typography variant="h4">🎬 Watchlist</Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 3 }}>
         <TextField
@@ -89,20 +145,20 @@ export default function Home() {
         </Button>
       </Box>
 
-      {movies.map(movie => (
+      {movies.map((movie) => (
         <Box
           key={movie.id}
           sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
         >
           <Checkbox
             checked={movie.watched}
-            onChange={() => toggleWatched(movie.id)}
+            onChange={() => toggleWatched(movie)}
           />
 
           <Typography
             sx={{
               flexGrow: 1,
-              textDecoration: movie.watched ? "line-through" : "none"
+              textDecoration: movie.watched ? "line-through" : "none",
             }}
           >
             {movie.title} ({movie.year}) - {movie.genre}
@@ -112,7 +168,11 @@ export default function Home() {
             Edit
           </Button>
 
-          <Button size="small" color="error" onClick={() => deleteMovie(movie.id)}>
+          <Button
+            size="small"
+            color="error"
+            onClick={() => deleteMovie(movie.id)}
+          >
             Delete
           </Button>
         </Box>
