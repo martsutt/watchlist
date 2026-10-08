@@ -1,15 +1,21 @@
-let movies = [
-  {
-    id: 1,
-    title: "Interstellar",
-    genre: "Sci-Fi",
-    watched: true,
-    year: 2014,
-  },
-];
+import { createClient } from "@supabase/supabase-js";
 
-export function GET() {
-  return Response.json(movies);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+);
+
+export async function GET() {
+  const { data, error } = await supabase
+    .from("item")
+    .select("*")
+    .order("title");
+
+  if (error) {
+    return Response.json({ error: "Could not load movies." }, { status: 500 });
+  }
+
+  return Response.json(data);
 }
 
 export async function POST(request) {
@@ -40,17 +46,17 @@ export async function POST(request) {
       );
     }
 
-    const newMovie = {
-      id: Date.now(),
-      title,
-      genre,
-      watched,
-      year,
-    };
+    const { data, error } = await supabase
+      .from("item")
+      .insert({ title, genre, watched, year })
+      .select()
+      .single();
 
-    movies.push(newMovie);
+    if (error) {
+      return Response.json({ error: "Could not save movie." }, { status: 500 });
+    }
 
-    return Response.json(newMovie, { status: 201 });
+    return Response.json(data, { status: 201 });
   } catch (error) {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
