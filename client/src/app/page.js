@@ -41,13 +41,16 @@ export default function Home() {
   }
 
   async function saveMovie() {
-    if (!title.trim() || !genre.trim() || !year) return;
+    if (!title.trim() || !genre.trim()) {
+      setError("Title and genre are required.");
+      return;
+    }
     setError("");
 
     const body = {
       title: title.trim(),
       genre: genre.trim(),
-      year: Number(year),
+      year: year === "" ? null : Number(year),
     };
 
     try {
@@ -123,12 +126,14 @@ export default function Home() {
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2, my: 3 }}>
         <TextField
           label="Movie title"
+          required
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
 
         <TextField
           label="Genre"
+          required
           value={genre}
           onChange={(e) => setGenre(e.target.value)}
         />
@@ -161,7 +166,8 @@ export default function Home() {
               textDecoration: movie.watched ? "line-through" : "none",
             }}
           >
-            {movie.title} ({movie.year}) - {movie.genre}
+            {movie.title}
+            {movie.year != null && ` (${movie.year})`} - {movie.genre}
           </Typography>
 
           <Button size="small" onClick={() => editMovie(movie)}>
